@@ -1,0 +1,13 @@
+{
+  "name": "video-to-social-marketplace",
+  "owner": {
+    "name": "aleenafarizkhan"
+  },
+  "plugins": [
+    {
+      "name": "video-to-social",
+      "source": "./",
+      "description": "Shorts/Reels generation and Publora MCP posting"
+    }
+  ]
+}

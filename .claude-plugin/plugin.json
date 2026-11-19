@@ -1,0 +1,8 @@
+{
+  "name": "video-to-social",
+  "version": "1.0.0",
+  "description": "Turn authorized YouTube/local videos into captioned vertical clips and publish via Publora MCP.",
+  "author": {
+    "name": "aleenafarizkhan"
+  }
+}
