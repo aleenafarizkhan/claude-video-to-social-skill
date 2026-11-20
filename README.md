@@ -6,14 +6,15 @@ A standalone Claude Code plugin for turning authorized videos into captioned sho
 
 ## Choose your skill
 
-Both skills are installed side-by-side and work independently:
+The skills are installed side-by-side and work independently:
 
 | Skill | When to use | Command |
 | --- | --- | --- |
 | `video-to-social` | General Shorts + captions + optional Publora drafts/posts | `python scripts/pipeline.py ...` |
 | `video-to-shorts-cutter` | Gameplay-focused full-screen crop with adjustable character offset, no blur, optional hook and captions | `python scripts/shorts_cutter.py ...` |
+| `stream-split-screen` | Stack a stream above or below a second video while keeping the full frame visible | [FFmpeg workflow](skills/stream-split-screen/SKILL.md) |
 
-Choose explicitly in Claude Code: **“Use video-to-shorts-cutter”** or **“Use video-to-social”**. Use Publora publishing instructions from `video-to-social` for either skill when requested and authorized.
+Choose the skill by name in Claude Code, for example **“Use stream-split-screen.”** For publishing requests, follow the Publora instructions in `video-to-social` when authorized.
 
 Example cutter commands:
 ```bash
