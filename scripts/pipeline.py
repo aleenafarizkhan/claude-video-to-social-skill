@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -14,6 +15,11 @@ EXCITING = {"wow", "amazing", "crazy", "unbelievable", "insane", "look", "watch"
 DEFAULT_CLIP_COUNT = 5
 MIN_CLIP_LENGTH = 20
 MAX_CLIP_LENGTH = 55
+CAPTION_STYLES = {
+    "classic": (64, 1, 4, None),
+    "highlight": (64, 1, 4, "&H00FFFF&"),
+    "boxed": (68, 3, 8, "&H90FF90&"),
+}
 
 def command(args: list[str], capture=False, cwd=None):
     p = subprocess.run(args, text=True, stdout=subprocess.PIPE if capture else None, stderr=subprocess.PIPE if capture else None, cwd=cwd)
@@ -181,28 +187,53 @@ def ass_timestamp(seconds: float):
 def ass_escape(s: str):
     return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", " ")
 
-def write_ass(words: list[dict], start: float, end: float, path: Path):
-    header = """[Script Info]
+def write_ass(words: list[dict], start: float, end: float, path: Path, style: str = "classic"):
+    size, border_style, outline, highlight = CAPTION_STYLES[style]
+    subset = [w for w in words if start <= w["start"] < end]
+    # Use libass whole-line bidirectional layout for RTL text with inline colors.
+    encoding = -1 if any(unicodedata.bidirectional(char) in ("R", "AL")
+                         for word in subset for char in word["text"]) else 1
+    header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
 WrapStyle: 2
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,64,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,2,72,72,260,1
+Style: Default,Arial,{size},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,{border_style},{outline},1,2,72,72,260,{encoding}
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    subset = [w for w in words if start <= w["start"] < end]
-    # Group 3-5 words per subtitle for readability.
+    # Keep the phrase on screen while changing the active word's color.
     lines = []
     for k in range(0, len(subset), 4):
         chunk = subset[k:k+4]
         s = max(0, chunk[0]["start"]-start)
         e = min(end-start, max(s+.25, chunk[-1]["end"]-start))
-        content = ass_escape(" ".join(w["text"] for w in chunk))
-        lines.append(f"Dialogue: 0,{ass_timestamp(s)},{ass_timestamp(e)},Default,,0,0,0,,{content}\n")
+        if k + 4 < len(subset):
+            e = min(e, subset[k + 4]["start"] - start)
+        phrase = [ass_escape(word["text"]) for word in chunk]
+        plain = " ".join(phrase)
+        if highlight is None:
+            append_caption_event(lines, s, e, plain)
+            continue
+        cursor = s
+        for index, word in enumerate(chunk):
+            onset = min(e, max(cursor, word["start"] - start))
+            next_start = chunk[index + 1]["start"] - start if index + 1 < len(chunk) else e
+            offset = max(onset, min(e, next_start, word["end"] - start))
+            append_caption_event(lines, cursor, onset, plain)
+            active = phrase.copy()
+            active[index] = r"{\1c" + highlight + "}" + phrase[index] + r"{\1c}"
+            append_caption_event(lines, onset, offset, " ".join(active))
+            cursor = offset
+        append_caption_event(lines, cursor, e, plain)
     path.write_text(header + "".join(lines), encoding="utf-8")
+
+
+def append_caption_event(lines: list[str], start: float, end: float, text: str):
+    if round(start * 100) < round(end * 100):
+        lines.append(f"Dialogue: 0,{ass_timestamp(start)},{ass_timestamp(end)},Default,,0,0,0,,{text}\n")
 
 def export_clip(source: Path, start: float, end: float, ass: Path, dest: Path):
     # Use a stable portrait frame with centered smart-safe crop (no stretched aspect ratio).
@@ -245,7 +276,7 @@ def run(args):
         stem = f"clip_{i:02d}"
         ass = out/(stem+".ass"); mp4 = out/(stem+".mp4")
         if words:
-            write_ass(words, p["start"], p["end"], ass)
+            write_ass(words, p["start"], p["end"], ass, args.caption_style)
         export_clip(video, p["start"], p["end"], ass, mp4)
         manifest["clips"].append({"file":mp4.name,"start":p["start"],"end":p["end"],"rank_score":p["score"],"caption":make_caption(words,p["start"],p["end"],args.video),"status":"ready_for_review"})
     (out/"manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -260,6 +291,7 @@ def cli():
     p.add_argument("--model", default="small", help="Faster Whisper model")
     p.add_argument("--language", default=None)
     p.add_argument("--transcript", default=None, help="Optional words JSON, for offline tests")
+    p.add_argument("--caption-style", choices=CAPTION_STYLES, default="highlight")
     selection = p.add_mutually_exclusive_group()
     selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript and highlight signals without rendering")
     selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")

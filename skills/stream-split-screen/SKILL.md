@@ -29,6 +29,6 @@ ffmpeg -i "stream.mp4" -i "main-video.mp4" -filter_complex "[0:v]setpts=PTS-STAR
 
 - For stream on bottom, change the stack inputs to `[main][stream]`. For main-video audio, map `1:a:0?`.
 - For the full main video with a shorter stream, add `tpad=stop_mode=add:stop=-1:color=black` immediately before the `[stream]` output label. The main panel then controls the stack duration.
-- Add captions only when requested. Place them within the panel whose audio they transcribe, with clearance for faces, original subtitles, and HUD.
+- When captions are requested, reuse the caption styles from [video-to-social](../video-to-social/SKILL.md). Pass `style="highlight"` to `write_ass` in `scripts/pipeline.py` for the default yellow word-by-word highlight, or pass the user's chosen style. Render from a timestamped transcript, then position the captions within the relevant panel or in the adjacent blurred area to keep faces, original subtitles, and the HUD clear. Preserve the separate upper hook through the final frame.
 
 Use `ffprobe` to verify 1080×1920, the chosen audio track, and the expected duration. Preview the beginning, middle, and end to check panel order, full-frame visibility, and synchronization. Return the MP4 for review.

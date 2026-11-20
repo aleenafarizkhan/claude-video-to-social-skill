@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 from pipeline import command, ensure_binary, duration_of, input_video, transcribe, candidates, write_ass, make_caption
-from pipeline import DEFAULT_CLIP_COUNT, MIN_CLIP_LENGTH, MAX_CLIP_LENGTH
+from pipeline import CAPTION_STYLES, DEFAULT_CLIP_COUNT, MIN_CLIP_LENGTH, MAX_CLIP_LENGTH
 from pipeline import prepare_transcript, reviewed_ranges
 
 
@@ -106,7 +106,7 @@ def run(a):
         subtitles = out / (stem + ".ass")
         hookfile = out / (stem + "_hook.ass")
         if words:
-            write_ass(words, p["start"], p["end"], subtitles)
+            write_ass(words, p["start"], p["end"], subtitles, a.caption_style)
         if a.hook:
             hook_ass(hookfile, a.hook, p["end"] - p["start"])
         output = out / (stem + ".mp4")
@@ -135,6 +135,7 @@ def cli():
     p.add_argument("--hook", help="optional top hook text")
     p.add_argument("--no-captions", action="store_true", help="render without subtitle text")
     p.add_argument("--transcript", help="optional existing word-level transcript JSON")
+    p.add_argument("--caption-style", choices=CAPTION_STYLES, default="highlight")
     p.add_argument("--model", default="small")
     p.add_argument("--language", default=None)
     a = p.parse_args()
