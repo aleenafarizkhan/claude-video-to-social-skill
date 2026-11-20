@@ -14,6 +14,9 @@ This is an **independent, opt-in skill** alongside `video-to-social`. Do not sil
 - `video-to-social`: general centered clips + transcript-based selection + Publora publishing workflow.
 
 ## Cutter usage
+
+Use one skill and one 9:16 layout for each source video. Apply the selected skill and layout to every Short from that source, from the first frame to the last. Switch skill or layout only when the user explicitly asks, and apply the change only to the clips or time ranges they specify.
+
 From plugin root:
 ```bash
 python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode character --crop-x 300 --hook "EPIC GAMEPLAY"

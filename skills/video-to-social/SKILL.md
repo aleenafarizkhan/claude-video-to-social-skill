@@ -14,6 +14,9 @@ Author: aleenafarizkhan
 - Default to review/draft only; **do not publish or schedule without clear authorization**. A request to auto-post constitutes authorization only if targets, cadence and access have been specified.
 
 ## Workflow
+
+Use one skill and one 9:16 layout for each source video. Apply the selected skill and layout to every Short from that source, from the first frame to the last. Switch skill or layout only when the user explicitly asks, and apply the change only to the clips or time ranges they specify.
+
 1. Accept YouTube HTTPS URL or a local video file. Invoke from plugin root:
    `python scripts/pipeline.py 'VIDEO_URL' --output output/job-name --count 5 --clip-length 35`
    By default, a one-hour video yields 5 clips. Each clip is 20–55 seconds long, with a default target of 35 seconds. If there are too few speech-ranked moments, the pipeline fills the remaining slots with unranked segments.
