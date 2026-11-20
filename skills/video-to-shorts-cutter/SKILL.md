@@ -17,15 +17,16 @@ This is an **independent, opt-in skill** alongside `video-to-social`. Do not sil
 From plugin root:
 ```bash
 python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode character --crop-x 300 --hook "EPIC GAMEPLAY"
-python scripts/shorts_cutter.py "https://youtu.be/VIDEO_ID" --count 3 --clip-length 35 --mode character
+python scripts/shorts_cutter.py "https://youtu.be/VIDEO_ID" --count 5 --clip-length 35 --mode character
 python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode center
 ```
 
 - Characters are not tracked by vision. Character mode uses a **fixed, adjustable left-biased crop**; check preview and adjust `--crop-x` to keep the subject visible. Source must be licensed/authorized for reuse; never bypass restrictions.
 - Crop scales proportionally to cover 1080x1920, crops at x=max 0/min(requested x, available width) and adds **no blurred bars**. Source quality limits output fidelity.
 - MP4 uses H.264 High@4.1, yuv420p, faststart and AAC 44.1kHz; output may fail if source has unsupported codecs/resolutions or installed FFmpeg lacks libass.
-- Automatic moments use a **speech heuristic**, not visual action recognition. For gameplay with limited speech, ask for timestamps (`--start/--end`), or use transcript and review before export.
-- If user wants no subtitles, pass `--no-captions --start ...`; if user wants subtitles, faster-whisper must be installed.
+- Automatic mode yields 5 clips by default from a one-hour video. Each automatic or manual clip must be 20–55 seconds long. The default target is 35 seconds.
+- Automatic mode ranks moments using speech and fills any remaining slots with unranked segments. Use `--start` and `--end` to cut a single specific moment.
+- Use `--no-captions` to omit subtitles. Automatic selection with this flag uses unranked segments unless a transcript is supplied.
 - Top hook is rendered as a libass overlay, not an external background or font-file dependency.
 - Verify `manifest.json`, MP4 with `ffprobe`, and inspect crop before reporting success.
 

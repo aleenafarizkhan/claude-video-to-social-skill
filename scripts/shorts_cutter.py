@@ -3,10 +3,12 @@
 from __future__ import annotations
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
 from pipeline import command, ensure_binary, duration_of, input_video, transcribe, candidates, write_ass, make_caption
+from pipeline import DEFAULT_CLIP_COUNT, MIN_CLIP_LENGTH, MAX_CLIP_LENGTH
 
 
 def crop_filter(mode: str, x: int) -> str:
@@ -62,19 +64,22 @@ def run(a):
     out.mkdir(parents=True, exist_ok=True)
     video = input_video(a.video, out)
     duration = duration_of(video)
-    if duration < 4:
-        raise ValueError("Source video must be at least 4 seconds")
+    if duration < MIN_CLIP_LENGTH:
+        raise ValueError(f"Source video must be at least {MIN_CLIP_LENGTH} seconds")
     if a.start is not None:
-        if a.start < 0 or a.start >= duration:
+        if not math.isfinite(a.start) or a.start < 0 or a.start >= duration:
             raise ValueError("--start outside source duration")
-        if a.end is not None and (a.end <= a.start or a.end > duration):
+        if a.end is not None and not a.start < a.end <= duration:
             raise ValueError("--end must be greater than --start and within source duration")
-        picks = [{"start": a.start, "end": min(a.end or a.start + a.clip_length, duration), "score": None}]
+        end = min(a.start + a.clip_length, duration) if a.end is None else a.end
+        if not MIN_CLIP_LENGTH <= round(end - a.start, 3) <= MAX_CLIP_LENGTH:
+            raise ValueError(f"Clip must be {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} seconds long")
+        picks = [{"start": a.start, "end": end, "score": None}]
     else:
         if a.transcript:
             words = json.loads(Path(a.transcript).read_text(encoding="utf-8"))
         elif a.no_captions:
-            raise ValueError("Automatic highlight selection needs speech: supply --start or remove --no-captions")
+            words = []
         else:
             words, _ = transcribe(video, a.model, a.language)
         picks = candidates(words, duration, a.clip_length, a.count)
@@ -111,16 +116,16 @@ def cli():
     p.add_argument("--crop-x", type=int, default=300, help="horizontal pixel offset after scaling; character mode only")
     p.add_argument("--start", type=float, help="start time in seconds; skips automatic moment ranking")
     p.add_argument("--end", type=float, help="end time in seconds")
-    p.add_argument("--count", type=int, default=3)
+    p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)
     p.add_argument("--clip-length", type=int, default=35)
     p.add_argument("--hook", help="optional top hook text")
-    p.add_argument("--no-captions", action="store_true", help="render silent/no subtitle text; use with --start")
+    p.add_argument("--no-captions", action="store_true", help="render without subtitle text")
     p.add_argument("--transcript", help="optional existing word-level transcript JSON")
     p.add_argument("--model", default="small")
     p.add_argument("--language", default=None)
     a = p.parse_args()
-    if not 1 <= a.count <= 20 or not 8 <= a.clip_length <= 180 or a.crop_x < 0 or (a.end is not None and a.start is None):
-        p.error("count must be 1–20; clip-length 8–180; crop-x >= 0; --end needs --start")
+    if not 1 <= a.count <= 20 or not MIN_CLIP_LENGTH <= a.clip_length <= MAX_CLIP_LENGTH or a.crop_x < 0 or (a.end is not None and a.start is None):
+        p.error(f"count must be 1-20; clip-length {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH}; crop-x >= 0; --end needs --start")
     try:
         run(a)
     except (ValueError, RuntimeError) as exc:

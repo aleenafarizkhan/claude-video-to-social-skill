@@ -15,7 +15,8 @@ Author: aleenafarizkhan
 
 ## Workflow
 1. Accept YouTube HTTPS URL or a local video file. Invoke from plugin root:
-   `python scripts/pipeline.py 'VIDEO_URL' --output output/job-name --count 3 --clip-length 35`
+   `python scripts/pipeline.py 'VIDEO_URL' --output output/job-name --count 5 --clip-length 35`
+   By default, a one-hour video yields 5 clips. Each clip is 20–55 seconds long, with a default target of 35 seconds. If there are too few speech-ranked moments, the pipeline fills the remaining slots with unranked segments.
    The pipeline uses faster-whisper word timestamps and a heuristic speech/excitement score (not a guaranteed viral classifier), FFmpeg portrait crop and burned-in ASS subtitles.
 2. Open `manifest.json`; inspect file existence, rendered durations, speech and crop, and adjust errors before showing selected clips to the user. Candidate ranking is heuristic; do not describe it as objective virality prediction.
 3. Create platform-tailored text and hashtags after reviewing the transcript. Keep source credit. Use `manifest.json` captions as starting drafts, not final optimization.

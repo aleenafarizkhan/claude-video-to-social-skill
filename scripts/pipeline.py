@@ -3,7 +3,6 @@
 from __future__ import annotations
 import argparse
 import json
-import math
 import re
 import shutil
 import subprocess
@@ -12,6 +11,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 EXCITING = {"wow", "amazing", "crazy", "unbelievable", "insane", "look", "watch", "what", "why", "how", "secret", "best", "never", "finally", "oh", "no", "yes", "whoa", "incredible", "funny", "listen", "important", "wait"}
+DEFAULT_CLIP_COUNT = 5
+MIN_CLIP_LENGTH = 20
+MAX_CLIP_LENGTH = 55
 
 def command(args: list[str], capture=False, cwd=None):
     p = subprocess.run(args, text=True, stdout=subprocess.PIPE if capture else None, stderr=subprocess.PIPE if capture else None, cwd=cwd)
@@ -63,8 +65,7 @@ def transcribe(path: Path, model: str, language: str | None):
     return words, info.language
 
 def candidates(words: list[dict], video_duration: float, clip_length: int, count: int):
-    if not words:
-        return [{"start": round(min(i*clip_length, max(0,video_duration-clip_length)), 2), "end": round(min(video_duration, (i+1)*clip_length),2), "score": 0} for i in range(min(count, max(1, math.ceil(video_duration/clip_length))))]
+    video_duration = int(video_duration * 100) / 100
     step = max(5, clip_length//4)
     starts = {0.0, max(0.0, video_duration-clip_length)}
     starts.update(float(i) for i in range(0, int(video_duration), step))
@@ -73,7 +74,7 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
     pool = []
     for start in sorted(starts):
         end = min(video_duration, start+clip_length)
-        if end-start < min(8, video_duration*.8):
+        if round(end - start, 2) < MIN_CLIP_LENGTH:
             continue
         selection = [w for w in words if w["start"] >= start and w["start"] < end]
         if not selection:
@@ -91,6 +92,13 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
             selected.append(c)
             if len(selected) == count:
                 break
+    # Fill any remaining slots when speech is sparse or absent.
+    for start in range(0, int(video_duration) - MIN_CLIP_LENGTH + 1, clip_length):
+        if len(selected) == count:
+            break
+        end = round(min(video_duration, start + clip_length), 2)
+        if all(end <= clip["start"] or start >= clip["end"] for clip in selected):
+            selected.append({"start": start, "end": end, "score": 0})
     return sorted(selected, key=lambda x: x["start"])
 
 def ass_timestamp(seconds: float):
@@ -144,8 +152,8 @@ def run(args):
     out = Path(args.output).resolve(); out.mkdir(parents=True, exist_ok=True)
     video = input_video(args.video, out)
     duration = duration_of(video)
-    if duration < 4:
-        raise ValueError("Video must be at least 4 seconds long")
+    if duration < MIN_CLIP_LENGTH:
+        raise ValueError(f"Video must be at least {MIN_CLIP_LENGTH} seconds long")
     if args.transcript:
         words = json.loads(Path(args.transcript).read_text(encoding="utf-8"))
         language = args.language or "unknown"
@@ -170,14 +178,14 @@ def cli():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("video", help="YouTube HTTPS URL or local video path")
     p.add_argument("--output", default="output")
-    p.add_argument("--count", type=int, default=3)
+    p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)
     p.add_argument("--clip-length", type=int, default=35)
     p.add_argument("--model", default="small", help="Faster Whisper model")
     p.add_argument("--language", default=None)
     p.add_argument("--transcript", default=None, help="Optional words JSON, for offline tests")
     args=p.parse_args()
-    if not 1 <= args.count <= 20 or not 8 <= args.clip_length <= 180:
-        p.error("--count 1-20 and --clip-length 8-180 required")
+    if not 1 <= args.count <= 20 or not MIN_CLIP_LENGTH <= args.clip_length <= MAX_CLIP_LENGTH:
+        p.error(f"--count 1-20 and --clip-length {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} required")
     try: run(args)
     except (RuntimeError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr); sys.exit(1)
