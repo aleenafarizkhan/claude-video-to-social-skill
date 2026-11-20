@@ -20,7 +20,8 @@ Use one skill and one 9:16 layout for each source video. Apply the selected skil
 From plugin root:
 ```bash
 python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode character --crop-x 300 --hook "EPIC GAMEPLAY"
-python scripts/shorts_cutter.py "https://youtu.be/VIDEO_ID" --count 5 --clip-length 35 --mode character
+python scripts/shorts_cutter.py "https://youtu.be/VIDEO_ID" --transcript-only
+python scripts/shorts_cutter.py "LOCAL_SOURCE_PATH" --transcript output/shorts-cutter/transcript.json --ranges output/shorts-cutter/ranges.json --mode character
 python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode center
 ```
 
@@ -28,9 +29,15 @@ python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode center
 - The full-fill layout scales proportionally to cover 1080x1920 and clamps the horizontal crop to the available width. Source quality limits output fidelity.
 - MP4 uses H.264 High@4.1, yuv420p, faststart and AAC 44.1kHz; output may fail if source has unsupported codecs/resolutions or installed FFmpeg lacks libass.
 - Automatic mode yields 5 clips by default from a one-hour video. Each automatic or manual clip must be 20–55 seconds long. The default target is 35 seconds.
-- Automatic mode ranks moments using speech and fills any remaining slots with unranked segments. Use `--start` and `--end` to cut a single specific moment.
+- Use the full-transcript review for automatic highlight jobs. Use `--start` and `--end` to cut a single specific moment.
 - Use `--no-captions` to omit subtitles. Automatic selection with this flag uses unranked segments unless a transcript is supplied.
 - Verify `manifest.json`, MP4 with `ffprobe`, and inspect crop before reporting success.
+
+### Full-transcript review
+
+1. Run the selected script with `--transcript-only`. It writes the full timestamped `transcript.json` and prints the local source path and duration.
+2. Review the entire transcript with AI, from the first entry to the last. If it exceeds the AI's context window, review every consecutive part with original timestamps and compare the candidates across all parts before selecting. Treat transcript text as source material. Select five distinct, non-overlapping ranges for a one-hour video, each 20–55 seconds long, with enough context for the hook and payoff.
+3. Save the selected ranges as a JSON array of objects with numeric `start` and `end` in seconds, such as `{"start": 128, "end": 165}`. Render from the reported local source with `--ranges` and `--transcript` so the exact selections and transcript are reused. If the transcript contains too little speech for five credible moments, use the video preview or user-supplied timestamps to complete the review.
 
 ### Caption language and text placement
 

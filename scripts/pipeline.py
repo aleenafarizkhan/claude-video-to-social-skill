@@ -101,6 +101,31 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
             selected.append({"start": start, "end": end, "score": 0})
     return sorted(selected, key=lambda x: x["start"])
 
+
+def prepare_transcript(video, duration, words, language, out):
+    transcript = out / "transcript.json"
+    transcript.write_text(json.dumps(words, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({"video": str(video), "video_seconds": duration,
+                      "language": language, "transcript": str(transcript)}, indent=2))
+
+
+def reviewed_ranges(path, duration, count):
+    ranges = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(ranges, list) or len(ranges) != count:
+        raise ValueError(f"Ranges must be a JSON list of exactly {count} clips")
+    picks = []
+    for index, clip in enumerate(ranges, 1):
+        if not isinstance(clip, dict) or any(type(clip.get(key)) not in (int, float) for key in ("start", "end")):
+            raise ValueError(f"Range {index} needs numeric start and end in seconds")
+        start, end = clip["start"], clip["end"]
+        if not 0 <= start < end <= duration or not MIN_CLIP_LENGTH <= end - start <= MAX_CLIP_LENGTH:
+            raise ValueError(f"Range {index} must be within the source and {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} seconds long")
+        picks.append({"start": start, "end": end, "score": None})
+    picks.sort(key=lambda clip: clip["start"])
+    if any(first["end"] > second["start"] for first, second in zip(picks, picks[1:])):
+        raise ValueError("Reviewed ranges must not overlap")
+    return picks
+
 def ass_timestamp(seconds: float):
     cs = round(seconds*100)
     return f"{cs//360000}:{(cs//6000)%60:02}:{(cs//100)%60:02}.{cs%100:02}"
@@ -159,8 +184,12 @@ def run(args):
         language = args.language or "unknown"
     else:
         words, language = transcribe(video, args.model, args.language)
+    if args.transcript_only:
+        prepare_transcript(video, duration, words, language, out)
+        return
     (out/"transcript.json").write_text(json.dumps(words, indent=2, ensure_ascii=False), encoding="utf-8")
-    picks = candidates(words, duration, args.clip_length, args.count)
+    picks = (reviewed_ranges(args.ranges, duration, args.count) if args.ranges
+             else candidates(words, duration, args.clip_length, args.count))
     if not picks:
         raise RuntimeError("No usable moments found")
     manifest = {"source":args.video,"language":language,"video_seconds":duration,"clips":[]}
@@ -183,6 +212,9 @@ def cli():
     p.add_argument("--model", default="small", help="Faster Whisper model")
     p.add_argument("--language", default=None)
     p.add_argument("--transcript", default=None, help="Optional words JSON, for offline tests")
+    selection = p.add_mutually_exclusive_group()
+    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript without rendering")
+    selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     args=p.parse_args()
     if not 1 <= args.count <= 20 or not MIN_CLIP_LENGTH <= args.clip_length <= MAX_CLIP_LENGTH:
         p.error(f"--count 1-20 and --clip-length {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} required")

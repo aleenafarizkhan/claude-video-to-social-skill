@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from pipeline import command, ensure_binary, duration_of, input_video, transcribe, candidates, write_ass, make_caption
 from pipeline import DEFAULT_CLIP_COUNT, MIN_CLIP_LENGTH, MAX_CLIP_LENGTH
+from pipeline import prepare_transcript, reviewed_ranges
 
 
 def crop_filter(mode: str, x: int) -> str:
@@ -66,7 +67,17 @@ def run(a):
     duration = duration_of(video)
     if duration < MIN_CLIP_LENGTH:
         raise ValueError(f"Source video must be at least {MIN_CLIP_LENGTH} seconds")
-    if a.start is not None:
+    if a.transcript_only:
+        if a.transcript:
+            words = json.loads(Path(a.transcript).read_text(encoding="utf-8"))
+            language = a.language or "unknown"
+        else:
+            words, language = transcribe(video, a.model, a.language)
+        prepare_transcript(video, duration, words, language, out)
+        return
+    if a.ranges:
+        picks = reviewed_ranges(a.ranges, duration, a.count)
+    elif a.start is not None:
         if not math.isfinite(a.start) or a.start < 0 or a.start >= duration:
             raise ValueError("--start outside source duration")
         if a.end is not None and not a.start < a.end <= duration:
@@ -87,7 +98,7 @@ def run(a):
         words = []
     elif a.transcript:
         words = json.loads(Path(a.transcript).read_text(encoding="utf-8"))
-    elif a.start is not None:
+    elif a.start is not None or a.ranges:
         words, _ = transcribe(video, a.model, a.language)
     manifest = {"source": a.video, "skill": "video-to-shorts-cutter", "mode": a.mode, "crop_x": a.crop_x, "clips": []}
     for i, p in enumerate(picks, 1):
@@ -114,7 +125,10 @@ def cli():
     p.add_argument("--output", default="output/shorts-cutter")
     p.add_argument("--mode", choices=["character", "center"], default="character")
     p.add_argument("--crop-x", type=int, default=300, help="horizontal pixel offset after scaling; character mode only")
-    p.add_argument("--start", type=float, help="start time in seconds; skips automatic moment ranking")
+    selection = p.add_mutually_exclusive_group()
+    selection.add_argument("--start", type=float, help="start time in seconds; skips automatic moment ranking")
+    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript without rendering")
+    selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     p.add_argument("--end", type=float, help="end time in seconds")
     p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)
     p.add_argument("--clip-length", type=int, default=35)
