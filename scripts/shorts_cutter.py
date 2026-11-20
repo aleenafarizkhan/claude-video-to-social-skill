@@ -82,7 +82,7 @@ def run(a):
             raise ValueError("--start outside source duration")
         if a.end is not None and not a.start < a.end <= duration:
             raise ValueError("--end must be greater than --start and within source duration")
-        end = min(a.start + a.clip_length, duration) if a.end is None else a.end
+        end = min(a.start + (a.clip_length or 35), duration) if a.end is None else a.end
         if not MIN_CLIP_LENGTH <= round(end - a.start, 3) <= MAX_CLIP_LENGTH:
             raise ValueError(f"Clip must be {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} seconds long")
         picks = [{"start": a.start, "end": end, "score": None}]
@@ -131,7 +131,7 @@ def cli():
     selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     p.add_argument("--end", type=float, help="end time in seconds")
     p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)
-    p.add_argument("--clip-length", type=int, default=35)
+    p.add_argument("--clip-length", type=int, help="Fixed target length in seconds; omit for speech-aware automatic cuts")
     p.add_argument("--hook", help="optional top hook text")
     p.add_argument("--no-captions", action="store_true", help="render without subtitle text")
     p.add_argument("--transcript", help="optional existing word-level transcript JSON")
@@ -139,7 +139,8 @@ def cli():
     p.add_argument("--model", default="small")
     p.add_argument("--language", default=None)
     a = p.parse_args()
-    if not 1 <= a.count <= 20 or not MIN_CLIP_LENGTH <= a.clip_length <= MAX_CLIP_LENGTH or a.crop_x < 0 or (a.end is not None and a.start is None):
+    if (not 1 <= a.count <= 20 or a.clip_length is not None and not MIN_CLIP_LENGTH <= a.clip_length <= MAX_CLIP_LENGTH
+            or a.crop_x < 0 or (a.end is not None and a.start is None)):
         p.error(f"count must be 1-20; clip-length {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH}; crop-x >= 0; --end needs --start")
     try:
         run(a)

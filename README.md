@@ -57,7 +57,7 @@ Or put the `skills/video-to-social/SKILL.md` skill into your Claude Code project
 
 ## Run just the local pipeline
 ```bash
-python scripts/pipeline.py 'https://youtu.be/VIDEO_ID' --output output/demo --count 3 --clip-length 35
+python scripts/pipeline.py 'https://youtu.be/VIDEO_ID' --output output/demo
 python scripts/pipeline.py '/path/to/owned-video.mp4' --output output/demo
 ```
 

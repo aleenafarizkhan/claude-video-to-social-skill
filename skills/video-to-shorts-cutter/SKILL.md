@@ -28,12 +28,14 @@ python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode center
 - Characters are not tracked by vision. Character mode uses a **fixed, adjustable left-biased crop**; check preview and adjust `--crop-x` to keep the subject visible. Source must be licensed/authorized for reuse; never bypass restrictions.
 - The full-fill layout scales proportionally to cover 1080x1920 and clamps the horizontal crop to the available width. Source quality limits output fidelity.
 - MP4 uses H.264 High@4.1, yuv420p, faststart and AAC 44.1kHz; output may fail if source has unsupported codecs/resolutions or installed FFmpeg lacks libass.
-- Automatic mode yields 5 clips by default from a one-hour video. Each automatic or manual clip must be 20–55 seconds long. The default target is 35 seconds.
+- Automatic mode yields 5 clips by default from a one-hour video. Each automatic or manual clip must be 20–55 seconds long. Use `--clip-length` only for an explicitly requested fixed target.
 - Use the full-transcript review for automatic highlight jobs. Use `--start` and `--end` to cut a single specific moment.
 - Use `--no-captions` to omit subtitles. Automatic selection with this flag uses unranked segments unless a transcript is supplied.
 - Verify `manifest.json`, MP4 with `ffprobe`, and inspect crop before reporting success.
 
 ### Full-transcript review
+
+Choose each range's duration independently within 20–55 seconds. Start before the first spoken word of the selected thought and end after its last word and payoff. Prefer a sentence boundary or natural pause at both cuts. If the thought cannot fit, choose another moment. Preview the opening and ending audio before final delivery.
 
 1. Run the selected script with `--transcript-only`. It writes the full timestamped `transcript.json` and a `highlight-signals.json` file with audio loudness spikes and scene-change timestamps. Both use seconds from the start of the source.
 2. Review the entire transcript with AI, from the first entry to the last, alongside the matching time ranges in `highlight-signals.json`. If the materials exceed the AI's context window, review every consecutive part with original timestamps and compare candidates across all parts before selecting. Use clustered spikes and cuts as clues for gameplay or action, and preview those moments in the source to confirm what happened before selecting them. Loudness alone cannot identify laughter or screams. Select five distinct, non-overlapping ranges for a one-hour video, each 20–55 seconds long, with enough context for the hook and payoff.

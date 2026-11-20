@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import unicodedata
+from bisect import bisect_left, bisect_right
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -70,19 +71,44 @@ def transcribe(path: Path, model: str, language: str | None):
             words.append({"start": round(seg.start, 3), "end": round(seg.end, 3), "text": seg.text.strip()})
     return words, info.language
 
-def candidates(words: list[dict], video_duration: float, clip_length: int, count: int):
-    video_duration = int(video_duration * 100) / 100
-    step = max(5, clip_length//4)
-    starts = {0.0, max(0.0, video_duration-clip_length)}
-    starts.update(float(i) for i in range(0, int(video_duration), step))
-    # sentence starts are more natural cut points than fixed windows
-    starts.update(max(0, w["start"]-0.3) for w in words if w["text"][:1].isupper())
+def candidates(words: list[dict], video_duration: float, clip_length: int | None, count: int):
+    video_duration = int(video_duration * 1000) / 1000
+    target = clip_length or 35
+    starts = {0.0, max(0.0, video_duration - target)}
+    words = sorted(words, key=lambda word: word["start"])
+    word_starts = [word["start"] for word in words]
+    word_ends = sorted({word["end"] for word in words})
+    phrase_ends = []
+    if clip_length is None and words:
+        starts = {words[0]["start"]}
+        for word, following in zip(words, words[1:]):
+            if word["end"] <= following["start"] and (
+                word["text"].rstrip('\"\u201d\u2019)').endswith((".", "!", "?", "।", "؟", "۔"))
+                or following["start"] - word["end"] >= 0.4
+            ):
+                phrase_ends.append(word["end"])
+                starts.add(following["start"])
+        phrase_ends = sorted({*phrase_ends, words[-1]["end"]})
+    else:
+        starts.update(float(i) for i in range(0, int(video_duration), max(5, target // 4)))
+
+    def end_for(start):
+        ideal = min(video_duration, start + target)
+        if clip_length is None:
+            lower = round(start + MIN_CLIP_LENGTH, 3)
+            upper = min(video_duration, round(start + MAX_CLIP_LENGTH, 3))
+            for boundaries in (phrase_ends, word_ends):
+                options = boundaries[bisect_left(boundaries, lower):bisect_right(boundaries, upper)]
+                if options:
+                    return min(options, key=lambda end: abs(end - ideal))
+        return ideal
+
     pool = []
     for start in sorted(starts):
-        end = min(video_duration, start+clip_length)
-        if round(end - start, 2) < MIN_CLIP_LENGTH:
+        end = end_for(start)
+        if round(end - start, 3) < MIN_CLIP_LENGTH:
             continue
-        selection = [w for w in words if w["start"] >= start and w["start"] < end]
+        selection = words[bisect_left(word_starts, start):bisect_left(word_starts, end)]
         if not selection:
             continue
         tokens = [re.sub(r"[^\w]", "", w["text"].lower()) for w in selection]
@@ -90,7 +116,7 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
         excitement = sum(t in EXCITING for t in tokens)
         punctuation = sum(w["text"].endswith(("!", "?")) for w in selection)
         score = min(rate, 3.6)*2 + excitement*2.5 + punctuation*1.8 + min(len(tokens), 35)*0.02
-        pool.append({"start": round(start, 2), "end": round(end, 2), "score": round(score, 2)})
+        pool.append({"start": round(start, 3), "end": round(end, 3), "score": round(score, 2)})
     pool.sort(key=lambda x: x["score"], reverse=True)
     selected = []
     for c in pool:
@@ -99,10 +125,10 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
             if len(selected) == count:
                 break
     # Fill any remaining slots when speech is sparse or absent.
-    for start in range(0, int(video_duration) - MIN_CLIP_LENGTH + 1, clip_length):
+    for start in range(0, int(video_duration) - MIN_CLIP_LENGTH + 1, target):
         if len(selected) == count:
             break
-        end = round(min(video_duration, start + clip_length), 2)
+        end = round(end_for(start), 3)
         if all(end <= clip["start"] or start >= clip["end"] for clip in selected):
             selected.append({"start": start, "end": end, "score": 0})
     return sorted(selected, key=lambda x: x["start"])
@@ -172,7 +198,7 @@ def reviewed_ranges(path, duration, count):
         if not isinstance(clip, dict) or any(type(clip.get(key)) not in (int, float) for key in ("start", "end")):
             raise ValueError(f"Range {index} needs numeric start and end in seconds")
         start, end = clip["start"], clip["end"]
-        if not 0 <= start < end <= duration or not MIN_CLIP_LENGTH <= end - start <= MAX_CLIP_LENGTH:
+        if not 0 <= start < end <= duration or not MIN_CLIP_LENGTH <= round(end - start, 3) <= MAX_CLIP_LENGTH:
             raise ValueError(f"Range {index} must be within the source and {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} seconds long")
         picks.append({"start": start, "end": end, "score": None})
     picks.sort(key=lambda clip: clip["start"])
@@ -287,7 +313,7 @@ def cli():
     p.add_argument("video", help="YouTube HTTPS URL or local video path")
     p.add_argument("--output", default="output")
     p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)
-    p.add_argument("--clip-length", type=int, default=35)
+    p.add_argument("--clip-length", type=int, help="Fixed target length in seconds; omit for speech-aware cuts")
     p.add_argument("--model", default="small", help="Faster Whisper model")
     p.add_argument("--language", default=None)
     p.add_argument("--transcript", default=None, help="Optional words JSON, for offline tests")
@@ -296,7 +322,7 @@ def cli():
     selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript and highlight signals without rendering")
     selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     args=p.parse_args()
-    if not 1 <= args.count <= 20 or not MIN_CLIP_LENGTH <= args.clip_length <= MAX_CLIP_LENGTH:
+    if not 1 <= args.count <= 20 or (args.clip_length is not None and not MIN_CLIP_LENGTH <= args.clip_length <= MAX_CLIP_LENGTH):
         p.error(f"--count 1-20 and --clip-length {MIN_CLIP_LENGTH}-{MAX_CLIP_LENGTH} required")
     try: run(args)
     except (RuntimeError, ValueError) as exc:
