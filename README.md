@@ -4,6 +4,25 @@
 
 A standalone Claude Code plugin for turning authorized videos into captioned short-form clips and managing publishing workflows through Publora MCP. This is an independent project and is not affiliated with Publora.
 
+## Choose your skill
+
+Both skills are installed side-by-side and work independently:
+
+| Skill | When to use | Command |
+| --- | --- | --- |
+| `video-to-social` | General Shorts + captions + optional Publora drafts/posts | `python scripts/pipeline.py ...` |
+| `video-to-shorts-cutter` | Gameplay-focused full-screen crop with adjustable character offset, no blur, optional hook and captions | `python scripts/shorts_cutter.py ...` |
+
+Choose explicitly in Claude Code: **“Use video-to-shorts-cutter”** or **“Use video-to-social”**. Use Publora publishing instructions from `video-to-social` for either skill when requested and authorized.
+
+Example cutter commands:
+```bash
+python scripts/shorts_cutter.py "my-gameplay.mp4" --start 20 --end 50 --mode character --crop-x 300 --hook "EPIC MOMENT"
+python scripts/shorts_cutter.py "https://youtu.be/VIDEO_ID" --count 3 --mode character
+```
+
+The cutter's crop offset is static, not AI character tracking; verify framing on every source.
+
 ## Features
 - Paste an authorized public YouTube URL or a local video path
 - Whisper speech transcription with word timestamps
