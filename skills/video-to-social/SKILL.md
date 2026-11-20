@@ -29,6 +29,14 @@ Use one skill and one 9:16 layout for each source video. Apply the selected skil
 7. Call `get_post` and verify the media is attached and processing/validation complete. Use `update_post` to schedule (`scheduledTime` with ISO 8601 UTC and `status: scheduled`) or `publishNow: true` **only when explicitly authorized**. For TikTok/YouTube/Instagram, include appropriate `platformSettings`, e.g. YouTube title/privacy and Instagram `videoType: REELS`. Use settings documented in https://docs.publora.com/mcp/tools-reference .
 8. Call `get_post` again and report the actual draft/scheduled/publishing status and IDs; "publishNow" is asynchronous, not proof of publication. Record status in a local `publora-results.json`. Check duplicate risks before retries; reuse original idempotency keys.
 
+### Caption language and text placement
+
+- Produce one caption in the selected language. Supported languages are English, Roman Hindi, and Roman Urdu. Honor an explicit language choice. Otherwise use the spoken language for the clip if supported, with English as the fallback. For spoken Hindi, automatically use Roman Hindi. For spoken Urdu, use Roman Urdu. Write Hindi and Urdu in Latin letters in captions, hooks, and subtitles. Add relevant emojis to the post caption and keep on-video subtitles faithful to the speech.
+- Before burning subtitles, review the transcript and romanize the text while keeping the original timestamps. Review and update the manifest caption before handing off drafts or publishing.
+- For a full-fill layout, preview representative frames across the entire clip. Choose a fixed position for a short, clip-specific hook in available space that stays clear of faces, gameplay HUD, key action, and subtitles while the hook is visible. Keep the text within the portrait frame's safe margins.
+- For a blurred layout, fit the horizontal source in the center of the 1080×1920 canvas and fill the top and bottom with a blurred copy of the source. Put the hook in the upper blurred area and subtitles in the lower blurred area. Check readability and spacing in the rendered preview.
+- If the bundled render command lacks the requested layout or text positioning, use it for clip selection and render the same time ranges from the source with FFmpeg and positioned ASS overlays. Verify the final MP4s and update the manifest before delivery.
+
 ## Tools and recovery
 - MCP setup: `claude mcp add --transport http --scope user publora https://mcp.publora.com/mcp` then `/mcp` -> Authenticate. Do not commit tokens.
 - Publora tool names: `account_context`, `list_connections`, `create_post`, `get_upload_url`, `complete_media`, `get_post`, `update_post`.
