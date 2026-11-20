@@ -102,11 +102,59 @@ def candidates(words: list[dict], video_duration: float, clip_length: int, count
     return sorted(selected, key=lambda x: x["start"])
 
 
+def signal_measurements(video: Path, stream: str, filters: str, metric: str):
+    mapping, filter_option = ("0:v:0", "-vf") if stream == "video" else ("0:a:0", "-af")
+    output = command(["ffmpeg", "-nostdin", "-v", "error", "-i", str(video),
+                      "-map", mapping, filter_option, filters, "-f", "null", "-"], capture=True)
+    timestamp = None
+    for line in output.splitlines():
+        if match := re.search(r"\bpts_time:(\S+)", line):
+            timestamp = float(match[1])
+        elif timestamp is not None and line.startswith(metric + "="):
+            yield timestamp, float(line.split("=", 1)[1])
+
+
+def highlight_signals(video: Path, duration: float):
+    scene_metric = "lavfi.scene_score"
+    scenes = signal_measurements(
+        video, "video",
+        "scale=320:-2,select='gt(scene,0.35)',metadata=mode=print:file=-", scene_metric,
+    )
+    scene_changes = [{"time": round(time, 3), "score": round(score, 3)}
+                     for time, score in scenes if 0 <= time < duration]
+
+    audio_metric = "lavfi.astats.Overall.RMS_level"
+    audio_stream = command(["ffprobe", "-v", "error", "-select_streams", "a:0",
+                            "-show_entries", "stream=index", "-of", "csv=p=0", str(video)], capture=True)
+    spikes = []
+    if audio_stream.strip():
+        levels = [(time, level) for time, level in signal_measurements(
+            video, "audio", "aresample=8000,asetnsamples=n=4000:p=0,"
+            "astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=RMS_level,"
+            f"ametadata=mode=print:key={audio_metric}:file=-", audio_metric,
+        ) if 0 <= time < duration and level <= 0]
+        if levels:
+            baseline = sorted(level for _, level in levels)[len(levels) // 2]
+            threshold = max(-45, baseline + 6)
+            for time, level in levels:
+                if level < threshold:
+                    continue
+                spike = {"time": round(time, 3), "rms_dbfs": round(level, 2)}
+                if not spikes or time - spikes[-1]["time"] >= 2:
+                    spikes.append(spike)
+                elif spike["rms_dbfs"] > spikes[-1]["rms_dbfs"]:
+                    spikes[-1] = spike
+    return {"scene_changes": scene_changes, "audio_spikes": spikes}
+
+
 def prepare_transcript(video, duration, words, language, out):
     transcript = out / "transcript.json"
     transcript.write_text(json.dumps(words, indent=2, ensure_ascii=False), encoding="utf-8")
+    signals = out / "highlight-signals.json"
+    signals.write_text(json.dumps(highlight_signals(video, duration), indent=2), encoding="utf-8")
     print(json.dumps({"video": str(video), "video_seconds": duration,
-                      "language": language, "transcript": str(transcript)}, indent=2))
+                      "language": language, "transcript": str(transcript),
+                      "highlight_signals": str(signals)}, indent=2))
 
 
 def reviewed_ranges(path, duration, count):
@@ -213,7 +261,7 @@ def cli():
     p.add_argument("--language", default=None)
     p.add_argument("--transcript", default=None, help="Optional words JSON, for offline tests")
     selection = p.add_mutually_exclusive_group()
-    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript without rendering")
+    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript and highlight signals without rendering")
     selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     args=p.parse_args()
     if not 1 <= args.count <= 20 or not MIN_CLIP_LENGTH <= args.clip_length <= MAX_CLIP_LENGTH:

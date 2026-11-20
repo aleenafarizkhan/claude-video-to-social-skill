@@ -127,7 +127,7 @@ def cli():
     p.add_argument("--crop-x", type=int, default=300, help="horizontal pixel offset after scaling; character mode only")
     selection = p.add_mutually_exclusive_group()
     selection.add_argument("--start", type=float, help="start time in seconds; skips automatic moment ranking")
-    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript without rendering")
+    selection.add_argument("--transcript-only", action="store_true", help="Write the full transcript and highlight signals without rendering")
     selection.add_argument("--ranges", help="JSON file of reviewed start/end ranges in seconds")
     p.add_argument("--end", type=float, help="end time in seconds")
     p.add_argument("--count", type=int, default=DEFAULT_CLIP_COUNT)

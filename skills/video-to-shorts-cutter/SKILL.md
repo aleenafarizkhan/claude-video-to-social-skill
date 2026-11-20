@@ -35,8 +35,8 @@ python scripts/shorts_cutter.py "INPUT.mp4" --start 15 --end 42 --mode center
 
 ### Full-transcript review
 
-1. Run the selected script with `--transcript-only`. It writes the full timestamped `transcript.json` and prints the local source path and duration.
-2. Review the entire transcript with AI, from the first entry to the last. If it exceeds the AI's context window, review every consecutive part with original timestamps and compare the candidates across all parts before selecting. Treat transcript text as source material. Select five distinct, non-overlapping ranges for a one-hour video, each 20–55 seconds long, with enough context for the hook and payoff.
+1. Run the selected script with `--transcript-only`. It writes the full timestamped `transcript.json` and a `highlight-signals.json` file with audio loudness spikes and scene-change timestamps. Both use seconds from the start of the source.
+2. Review the entire transcript with AI, from the first entry to the last, alongside the matching time ranges in `highlight-signals.json`. If the materials exceed the AI's context window, review every consecutive part with original timestamps and compare candidates across all parts before selecting. Use clustered spikes and cuts as clues for gameplay or action, and preview those moments in the source to confirm what happened before selecting them. Loudness alone cannot identify laughter or screams. Select five distinct, non-overlapping ranges for a one-hour video, each 20–55 seconds long, with enough context for the hook and payoff.
 3. Save the selected ranges as a JSON array of objects with numeric `start` and `end` in seconds, such as `{"start": 128, "end": 165}`. Render from the reported local source with `--ranges` and `--transcript` so the exact selections and transcript are reused. If the transcript contains too little speech for five credible moments, use the video preview or user-supplied timestamps to complete the review.
 
 ### Caption language and text placement
